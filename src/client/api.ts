@@ -1,7 +1,7 @@
 /**
  * @dsh-external/dsh-file-manager — 客户端 API 封装。
  */
-import type { FsEntry, FileReadResult } from './types'
+import type { FsEntry, FileReadResult, SearchResult } from './types'
 
 const API = '/@dsh-external/dsh-file-manager/api'
 
@@ -65,4 +65,26 @@ export async function deleteEntry(root: string, path: string, session: string): 
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path }),
   })
+}
+
+export interface SearchParams {
+  root: string
+  q: string
+  session?: string
+  caseSensitive?: boolean
+  regex?: boolean
+  wholeWord?: boolean
+  limit?: number
+}
+
+export async function searchFiles(params: SearchParams): Promise<SearchResult> {
+  return await api<SearchResult>(`/search${qs({
+    root: params.root,
+    q: params.q,
+    session: params.session,
+    caseSensitive: params.caseSensitive ? '1' : undefined,
+    regex: params.regex ? '1' : undefined,
+    wholeWord: params.wholeWord ? '1' : undefined,
+    limit: params.limit,
+  })}`)
 }

@@ -20,6 +20,7 @@ import {
   listDir,
   readFile,
   renameEntry,
+  searchFiles,
   writeFile,
 } from './api'
 import {
@@ -34,7 +35,8 @@ import {
   type EditorPaneState,
   type OpenFileTab,
 } from './editor-pane'
-import type { FileReadResult, FsEntry } from './types'
+import type { FileReadResult, FsEntry, SearchResult } from './types'
+import { SearchPanel } from './search-panel'
 import { TreeView, type RenamingState } from './tree-view'
 import { CSS } from './styles'
 
@@ -141,6 +143,10 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => { sessionRef.current = sessionId }, [sessionId])
   useEffect(() => { rootRef.current = root }, [root])
@@ -156,6 +162,27 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
     setToast({ kind, text })
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 4000)
+  }
+
+  const doSearch = async (): Promise<void> => {
+    const currentRoot = rootRef.current
+    const q = searchQuery.trim()
+    if (!currentRoot || !q) return
+    setSearching(true)
+    setError(null)
+    try {
+      const r = await searchFiles({
+        root: currentRoot,
+        q,
+        session: sessionRef.current,
+      })
+      setSearchResult(r)
+    } catch (e) {
+      setError(String((e as Error).message || e))
+      setSearchResult(null)
+    } finally {
+      setSearching(false)
+    }
   }
 
   const loadDir = async (dir: string): Promise<FsEntry[] | null> => {
@@ -302,6 +329,11 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
     } finally {
       setBusy(null)
     }
+  }
+
+  const openSearchFile = (file: string): void => {
+    if (!file) return
+    void openFileInPane(activePaneIdRef.current, file, true)
   }
 
   const openExternalPath = async (absPath: string): Promise<void> => {
@@ -635,6 +667,12 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
           <button disabled={!root} onClick={() => void refreshAll()}>
             {busy === 'refresh' ? '刷新中…' : '↻ 刷新'}
           </button>
+          <button
+            disabled={!root}
+            onClick={() => setSearchOpen((v) => !v)}
+          >
+            {searchOpen ? '✕ 退出搜索' : '🔍 全局搜索'}
+          </button>
         </div>
         {root ? (
           <div className="cwd" title={root + (activeDir ? `/${activeDir}` : '')}>
@@ -647,21 +685,33 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
         {root && (
           <div className="split">
             <div className="tree-pane">
-              <TreeView
-                childrenMap={childrenMap}
-                expanded={expanded}
-                selected={selectedFile}
-                renaming={renaming}
-                loadingDir={loadingDir}
-                onToggleDir={(rel) => void toggleDir(rel)}
-                onSelectFile={(rel) => void openFileInPane(activePaneIdRef.current, rel, false)}
-                onPinFile={(rel) => void openFileInPane(activePaneIdRef.current, rel, true)}
-                onSelectDir={(rel) => setActiveDir(rel)}
-                onRenameStart={(rel, name) => setRenaming({ rel, name })}
-                onRenameCancel={() => setRenaming(null)}
-                onRenameSubmit={(rel, newName) => void submitRename(rel, newName)}
-                onDelete={(entry) => void removeEntry(entry)}
-              />
+              {searchOpen ? (
+                <SearchPanel
+                  query={searchQuery}
+                  searching={searching}
+                  result={searchResult}
+                  onQueryChange={setSearchQuery}
+                  onSearch={() => void doSearch()}
+                  onOpenFile={(file) => openSearchFile(file)}
+                  onBack={() => setSearchOpen(false)}
+                />
+              ) : (
+                <TreeView
+                  childrenMap={childrenMap}
+                  expanded={expanded}
+                  selected={selectedFile}
+                  renaming={renaming}
+                  loadingDir={loadingDir}
+                  onToggleDir={(rel) => void toggleDir(rel)}
+                  onSelectFile={(rel) => void openFileInPane(activePaneIdRef.current, rel, false)}
+                  onPinFile={(rel) => void openFileInPane(activePaneIdRef.current, rel, true)}
+                  onSelectDir={(rel) => setActiveDir(rel)}
+                  onRenameStart={(rel, name) => setRenaming({ rel, name })}
+                  onRenameCancel={() => setRenaming(null)}
+                  onRenameSubmit={(rel, newName) => void submitRename(rel, newName)}
+                  onDelete={(entry) => void removeEntry(entry)}
+                />
+              )}
             </div>
             <EditorArea
               panes={panes}

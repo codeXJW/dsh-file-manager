@@ -20,6 +20,7 @@ import {
   listTree,
   readTextFile,
   renamePath,
+  searchText,
   writeTextFile,
 } from './files.js'
 
@@ -136,6 +137,21 @@ export function mountFileApi(ctx: ApiContext): () => void {
           return
         }
         const r = await readTextFile(root, file)
+        ok(res, { root, ...r })
+        return
+      }
+
+      // GET /search?root=&q=&caseSensitive=&regex=&wholeWord=&limit= —— 全局搜索
+      if (method === 'GET' && rest === 'search') {
+        const root = readRoot(url, null, session)
+        const q = param(url, 'q') ?? ''
+        const limitRaw = Number(param(url, 'limit') ?? '200')
+        const r = await searchText(root, q, {
+          caseSensitive: param(url, 'caseSensitive') === '1',
+          regex: param(url, 'regex') === '1',
+          wholeWord: param(url, 'wholeWord') === '1',
+          limit: Number.isFinite(limitRaw) ? limitRaw : 200,
+        })
         ok(res, { root, ...r })
         return
       }

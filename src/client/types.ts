@@ -19,3 +19,18 @@ export interface FileReadResult {
   size: number
   mtimeMs: number
 }
+
+export interface SearchMatch {
+  file: string
+  line: number
+  column: number
+  text: string
+}
+
+export interface SearchResult {
+  root: string
+  query: string
+  matches: SearchMatch[]
+  total: number
+  truncated: boolean
+}

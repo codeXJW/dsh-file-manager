@@ -57,6 +57,10 @@ export interface ReadFileResult {
   mtimeMs: number
 }
 
+
+
+
+
 function toPosix(p: string): string {
   return p.replace(/\\/g, '/')
 }
@@ -266,5 +270,123 @@ export async function isDirectory(root: string, dir: string): Promise<boolean> {
     return st.isDirectory()
   } catch {
     return false
+  }
+}
+
+/* ── 全局搜索（参考 VSCode 全局搜索） ───────────────────────── */
+
+export interface SearchMatch {
+  /** 相对 root 的文件路径（`/` 分隔）。 */
+  file: string
+  /** 行号（1 起）。 */
+  line: number
+  /** 命中起始列（1 起）。 */
+  column: number
+  /** 命中行的原文。 */
+  text: string
+}
+
+export interface SearchOptions {
+  /** 大小写敏感，默认 false。 */
+  caseSensitive?: boolean
+  /** 把 query 当正则表达式，默认 false。 */
+  regex?: boolean
+  /** 只匹配完整单词，默认 false。 */
+  wholeWord?: boolean
+  /** 最多返回多少条命中（默认 200，上限 1000）。 */
+  limit?: number
+}
+
+export interface SearchResult {
+  query: string
+  matches: SearchMatch[]
+  total: number
+  truncated: boolean
+}
+
+/** 全局搜索默认跳过的目录（避免扫 node_modules / 构建产物等重目录）。 */
+const SEARCH_IGNORE_DIRS = new Set([
+  '.git', 'node_modules', '.npm-cache', '.cache', 'dist', 'build',
+  'coverage', '.next', '.nuxt', '.turbo',
+])
+
+/** 全局搜索单个文件的大小上限（超过不读内容，避免拖垮内存）。 */
+const MAX_SEARCH_FILE_BYTES = 1 * 1024 * 1024
+/** 全局搜索命中条数上限。 */
+const MAX_SEARCH_RESULTS = 1000
+
+/**
+ * 全局文本搜索：递归扫描 root 内文件，返回包含 query 的行。
+ *  - 支持大小写/正则/整词匹配；
+ *  - 自动跳过二进制、超大文件、常用重目录；
+ *  - 路径始终限制在 root 内（不跟随符号链接目录）。
+ */
+export async function searchText(root: string, query: string, options: SearchOptions = {}): Promise<SearchResult> {
+  const q = String(query ?? '').trim()
+  const empty: SearchResult = { query: q, matches: [], total: 0, truncated: false }
+  if (!q) return empty
+
+  const rootAbs = resolve(root)
+  const limit = Math.max(1, Math.min(Number(options.limit) || 200, MAX_SEARCH_RESULTS))
+  const flags = options.caseSensitive ? 'g' : 'gi'
+
+  let pattern: RegExp
+  try {
+    const src = options.regex ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const body = options.wholeWord ? `\\b(?:${src})\\b` : src
+    pattern = new RegExp(body, flags)
+  } catch {
+    pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
+  }
+
+  const matches: SearchMatch[] = []
+  const files: string[] = []
+
+  async function walk(abs: string, rel: string): Promise<void> {
+    let entries
+    try {
+      entries = await fs.readdir(abs, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (SEARCH_IGNORE_DIRS.has(entry.name)) continue
+      const relPath = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        await walk(resolve(abs, entry.name), relPath)
+      } else if (entry.isFile()) {
+        if (isBinaryName(entry.name)) continue
+        files.push(toPosix(relPath))
+      }
+    }
+  }
+  await walk(rootAbs, '')
+
+  for (const file of files) {
+    if (matches.length >= limit) break
+    try {
+      const abs = resolve(rootAbs, file)
+      const st = await fs.stat(abs)
+      if (st.size > MAX_SEARCH_FILE_BYTES) continue
+      const buf = await fs.readFile(abs)
+      if (looksBinary(buf)) continue
+      const lines = buf.toString('utf8').split(/\r?\n/)
+      for (let i = 0; i < lines.length && matches.length < limit; i++) {
+        pattern.lastIndex = 0
+        const m = pattern.exec(lines[i])
+        if (m) {
+          matches.push({ file, line: i + 1, column: m.index + 1, text: lines[i] })
+        }
+      }
+    } catch {
+      // 单个文件不可读/已被删除时跳过，不影响整体搜索
+    }
+  }
+
+  return {
+    query: q,
+    matches,
+    total: matches.length,
+    truncated: matches.length >= limit,
   }
 }

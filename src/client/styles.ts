@@ -58,6 +58,19 @@ export const CSS = `
 .dfm .dfm-editor-meta{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--dsw-alias-border-l2,#d8dee4);background:var(--dsw-alias-bg-layer-1,#f6f8fa)}
 .dfm .dfm-editor-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dsw-alias-label-secondary,#57606a)}
 .dfm .dfm-dirty-text{color:#9a6700;font-size:12px}
+.dfm .dfm-search{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.dfm .dfm-search-input-row{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dsw-alias-border-l2,#d8dee4)}
+.dfm .dfm-search-input-row input{flex:1;min-width:0;font:inherit;padding:4px 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2,#d8dee4);background:var(--dsw-alias-bg-layer-2,#fff);color:inherit}
+.dfm .dfm-search-summary{padding:6px 10px;color:var(--dsw-alias-label-tertiary,#6e7781);font-size:12px;border-bottom:1px solid var(--dsw-alias-border-l2,#d8dee4)}
+.dfm .dfm-search-empty{padding:16px;color:var(--dsw-alias-label-tertiary,#6e7781);font-size:13px;text-align:center}
+.dfm .dfm-search-file-group{border-bottom:1px solid var(--dsw-alias-border-l2,#d8dee4)}
+.dfm .dfm-search-file{display:block;width:100%;text-align:left;padding:5px 10px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dsw-alias-label-primary,#1f2328);background:var(--dsw-alias-bg-layer-1,#f6f8fa);border:none;cursor:pointer}
+.dfm .dfm-search-file:hover{background:var(--dsw-alias-bg-layer-3,#eaeef2)}
+.dfm .dfm-search-lines{padding:2px 0}
+.dfm .dfm-search-line{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;padding:2px 10px;border:none;background:transparent;cursor:pointer;color:inherit;font-size:12px}
+.dfm .dfm-search-line:hover{background:var(--dsw-alias-bg-layer-1,#f6f8fa)}
+.dfm .dfm-search-line-no{flex:none;color:var(--dsw-alias-label-tertiary,#6e7781);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.dfm .dfm-search-line-text{white-space:pre-wrap;word-break:break-all}
 .dfm .notice{padding:24px;color:var(--dsw-alias-label-tertiary,#6e7781);text-align:center;font-size:13px}
 .dfm .spinner{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:6px;animation:dfmSpin .7s linear infinite}
 @keyframes dfmSpin{to{transform:rotate(360deg)}}

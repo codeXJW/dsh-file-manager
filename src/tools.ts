@@ -13,6 +13,7 @@ import {
   listTree,
   readTextFile,
   renamePath,
+  searchText,
   writeTextFile,
 } from './files.js'
 
@@ -70,6 +71,63 @@ export function registerFileTools(ctx: AppContext): () => void {
       const d = Number.isFinite(depth) ? Math.max(1, Math.min(6, Math.trunc(depth))) : 1
       const entries = await listTree(root, dir, d)
       return { tree: renderTree(entries, dir) }
+    },
+  })))
+
+  disposers.push(ctx.tools.register(defineTool({
+    name: 'file_search',
+    description: '全局搜索项目文件内容（参考 VSCode 全局搜索）：递归扫描项目根目录内的文本文件，返回包含关键字的行。默认跳过 .git/node_modules/构建产物等目录。',
+    parameters: {
+      path: { type: 'string', description: '可选：项目根目录绝对路径；不填默认取当前会话工作区' },
+      query: { type: 'string', required: true, description: '要搜索的关键字；设 regex=true 时作为正则表达式' },
+      caseSensitive: { type: 'boolean', description: '大小写敏感，默认 false' },
+      regex: { type: 'boolean', description: '把 query 当正则表达式，默认 false' },
+      wholeWord: { type: 'boolean', description: '只匹配完整单词，默认 false' },
+      limit: { type: 'integer', description: '最多返回命中条数，默认 200，上限 1000' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          query: { type: 'string' },
+          total: { type: 'integer' },
+          truncated: { type: 'boolean' },
+          matches: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                file: { type: 'string' },
+                line: { type: 'integer' },
+                column: { type: 'integer' },
+                text: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      render(_a, value: any) {
+        const lines = (value.matches ?? []).map((m: any) => `${m.file}:${m.line}:${m.column}  ${m.text}`)
+        const head = `共 ${value.total} 处${value.truncated ? '（已截断，请缩小范围或调整 limit）' : ''}`
+        return text(lines.length ? `${head}\n${lines.join('\n')}` : `未找到 “${value.query}”`)
+      },
+    },
+    async execute(args, exec) {
+      const root = rootOf(args, exec)
+      const query = String(args.query ?? '').trim()
+      if (!query) throw new Error('需要 query（要搜索的内容）')
+      const r = await searchText(root, query, {
+        caseSensitive: Boolean(args.caseSensitive),
+        regex: Boolean(args.regex),
+        wholeWord: Boolean(args.wholeWord),
+        limit: Number(args.limit ?? 200),
+      })
+      return r
+    },
+    presentCall(args: any) {
+      return { card: 'generic' as const, title: `搜索 ${args.query ?? ''}` }
     },
   })))
 
