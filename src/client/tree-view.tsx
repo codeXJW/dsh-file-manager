@@ -78,6 +78,7 @@ function TreeItem({ entry, depth, ...props }: {
     <div>
       <div
         className={'tree-row' + (entry.rel === props.selected ? ' selected' : '') + (isRenaming ? ' renaming' : '')}
+        data-rel={entry.rel}
         style={{ paddingLeft: 6 + depth * 14 }}
         onClick={handleRowClick}
         onDoubleClick={handleRowDoubleClick}

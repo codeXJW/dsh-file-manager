@@ -7,10 +7,12 @@
  * - 右侧多标签编辑器：单击斜体预览、双击固定、编辑后自动固定
  * - 支持左右分栏（两个编辑器组）
  * - 关闭未保存标签前二次确认
- * - 记忆上次打开的标签页：再次进入「文件」页时自动恢复已打开文件
+ * - 记忆上次的面板状态：再次进入「文件」页时自动恢复已打开文件、
+ *   目录树展开状态、当前目录与树滚动位置，不再是初始状态
+ * - 打开文件时左侧树自动展开父目录并滚动定位到选中文件（reveal）
  * 数据来自 host 的 `@dsh-external/dsh-file-manager/api` 端点。
  */
-import { useEffect, useRef, useState } from 'react'
+import { Component, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SlotsService } from '@deepseek-ai/dsh-client-ui-slots'
 import {
@@ -43,6 +45,21 @@ import { CSS } from './styles'
 type ClientContext = {
   slots: SlotsService
   effect(fn: () => (() => void) | void, label?: string): void
+}
+
+// 诊断：把面板内的全局错误写入 localStorage（与宿主同源，便于跨框架取证）
+if (typeof window !== 'undefined') {
+  const reportError = (text: string): void => {
+    try { localStorage.setItem('dsh-file-manager:last-error', text.slice(0, 4000)) } catch { /* ignore */ }
+  }
+  window.addEventListener('error', (e) => {
+    const err = e as ErrorEvent
+    reportError(`[error] ${err.message}\n${err.error?.stack || ''}`)
+  })
+  window.addEventListener('unhandledrejection', (e) => {
+    const reason = (e as PromiseRejectionEvent).reason
+    reportError(`[unhandledrejection] ${String(reason?.stack || reason)}`)
+  })
 }
 
 export const inject = ['slots', 'workspaces']
@@ -91,6 +108,12 @@ interface PersistedPane {
 interface PersistedState {
   activePaneId: string
   panes: PersistedPane[]
+  /** 展开的目录（相对路径）列表 */
+  expanded?: string[]
+  /** 上次所在的目录（相对路径） */
+  activeDir?: string
+  /** 目录树滚动位置 */
+  treeScrollTop?: number
 }
 
 function storageKey(sessionId: string): string {
@@ -109,7 +132,11 @@ function loadPersistedState(sessionId: string): PersistedState | null {
   }
 }
 
-function serializePersisted(panes: EditorPaneState[], activePaneId: string): PersistedState {
+function serializePersisted(
+  panes: EditorPaneState[],
+  activePaneId: string,
+  extra: { expanded: string[]; activeDir: string; treeScrollTop: number },
+): PersistedState {
   return {
     activePaneId,
     panes: panes.map((p) => ({
@@ -117,10 +144,49 @@ function serializePersisted(panes: EditorPaneState[], activePaneId: string): Per
       activeRel: p.activeRel,
       tabs: p.tabs.map((t) => ({ rel: t.rel, pin: t.pin })),
     })),
+    expanded: extra.expanded,
+    activeDir: extra.activeDir,
+    treeScrollTop: extra.treeScrollTop,
   }
 }
 
+/** 面板错误边界：渲染错误显示在面板内，而不是拖垮整个槽视图。 */
+class PanelErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error }
+  }
+
+  componentDidCatch(error: Error): void {
+    console.error('[dsh-file-manager] panel crashed:', error)
+  }
+
+  render(): ReactNode {
+    if (this.state.error) {
+      return (
+        <div className="dfm">
+          <h2>🗂 文件</h2>
+          <div className="err" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            面板渲染出错：{String(this.state.error?.stack || this.state.error)}
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+/** slots 注册入口：最外层错误边界，任何渲染错误都显示在面板内而非被宿主吞掉。 */
 export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
+  return (
+    <PanelErrorBoundary>
+      <FileManagerPanelInner {...props} />
+    </PanelErrorBoundary>
+  )
+}
+
+function FileManagerPanelInner(props: { sessionId?: string }): ReactNode {
   const sessionId = props.sessionId ?? ''
   const sessionRef = useRef(sessionId)
   const rootRef = useRef<string | null>(null)
@@ -130,6 +196,14 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
   const openExternalRef = useRef<(path: string) => Promise<void>>(async () => {})
   const panesRef = useRef<EditorPaneState[]>([createEditorPane('a')])
   const activePaneIdRef = useRef('a')
+  const activeDirRef = useRef('')
+  const treePaneRef = useRef<HTMLDivElement | null>(null)
+  const treeScrollRef = useRef(0)
+  /** 恢复记忆时待应用的树滚动位置（此时树还未渲染，等渲染后再应用） */
+  const pendingTreeScrollRef = useRef<number | null>(null)
+  const revealNonceRef = useRef(0)
+  /** 记忆恢复完成前禁止持久化写入，防止挂载初期的空状态覆盖上次会话 */
+  const hydratedRef = useRef(false)
 
   const [root, setRoot] = useState<string | null>(null)
   const [childrenMap, setChildrenMap] = useState<Record<string, FsEntry[]>>({})
@@ -147,6 +221,8 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
   const [searching, setSearching] = useState(false)
+  /** 需要滚动定位的文件（nonce 保证同一文件重复打开也会再次滚动） */
+  const [revealTarget, setRevealTarget] = useState<{ rel: string; nonce: number } | null>(null)
 
   useEffect(() => { sessionRef.current = sessionId }, [sessionId])
   useEffect(() => { rootRef.current = root }, [root])
@@ -154,6 +230,7 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
   useEffect(() => { expandedRef.current = expanded }, [expanded])
   useEffect(() => { panesRef.current = panes }, [panes])
   useEffect(() => { activePaneIdRef.current = activePaneId }, [activePaneId])
+  useEffect(() => { activeDirRef.current = activeDir }, [activeDir])
 
   const activePane = panes.find((p) => p.id === activePaneId) ?? panes[0]
   const selectedFile = activePane?.activeRel ?? null
@@ -185,16 +262,18 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
     }
   }
 
-  const loadDir = async (dir: string): Promise<FsEntry[] | null> => {
+  const loadDir = async (dir: string, opts?: { silent?: boolean }): Promise<FsEntry[] | null> => {
     const currentRoot = rootRef.current
     if (!currentRoot) return null
     setLoadingDir(dir)
     try {
       const entries = await listDir(currentRoot, dir, sessionRef.current)
+      // 立即同步 ref，保证同一次异步流程里后续的 hasOwnProperty 判断准确
+      childrenMapRef.current = { ...childrenMapRef.current, [dir]: entries }
       setChildrenMap((prev) => ({ ...prev, [dir]: entries }))
       return entries
     } catch (e) {
-      setError(String((e as Error).message || e))
+      if (!opts?.silent) setError(String((e as Error).message || e))
       return null
     } finally {
       setLoadingDir((prev) => (prev === dir ? null : prev))
@@ -204,6 +283,71 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
   const updatePane = (paneId: string, updater: (p: EditorPaneState) => EditorPaneState): void => {
     setPanes((prev) => prev.map((p) => (p.id === paneId ? updater(p) : p)))
   }
+
+  /** 收集 rel 的全部祖先目录（不含根 ''）。 */
+  function ancestorDirsOf(rel: string): string[] {
+    const parts = rel.split('/').filter(Boolean)
+    const dirs: string[] = []
+    let acc = ''
+    for (let i = 0; i < parts.length - 1; i++) {
+      acc = acc ? `${acc}/${parts[i]}` : parts[i]
+      dirs.push(acc)
+    }
+    return dirs
+  }
+
+  /**
+   * 在左侧树中定位一个文件：懒加载并展开其父目录，渲染完成后滚动到该行。
+   * 文件已在可视区域内时滚动是无操作，因此树内单击打开也可以放心调用。
+   */
+  const revealInTree = async (rel: string): Promise<void> => {
+    if (!rootRef.current || !rel) return
+    const dirs = ancestorDirsOf(rel)
+    for (const dir of dirs) {
+      if (!Object.prototype.hasOwnProperty.call(childrenMapRef.current, dir)) {
+        await loadDir(dir, { silent: true })
+      }
+    }
+    if (dirs.length) {
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        for (const d of dirs) next.add(d)
+        return next
+      })
+    }
+    setRevealTarget({ rel, nonce: ++revealNonceRef.current })
+  }
+
+  // 恢复记忆的树滚动位置（等树真正渲染出来后再应用一次）。
+  // 必须先于 reveal 执行：先还原上次滚动位置，reveal 再把活动文件滚进可视区域。
+  useEffect(() => {
+    if (pendingTreeScrollRef.current == null) return
+    const pane = treePaneRef.current
+    if (!pane) return
+    pane.scrollTop = pendingTreeScrollRef.current
+    pendingTreeScrollRef.current = null
+  }, [root, childrenMap])
+
+  // reveal 渲染完成后把选中行滚进可视区域（只滚树面板，不牵动整页）。
+  // 注意：宿主环境可能没有 CSS.escape，这里遍历行元素比较 dataset，避免选择器转义。
+  useEffect(() => {
+    if (!revealTarget) return
+    const pane = treePaneRef.current
+    if (!pane) return
+    let row: HTMLElement | null = null
+    const rows = pane.querySelectorAll<HTMLElement>('[data-rel]')
+    for (const r of rows) {
+      if (r.dataset.rel === revealTarget.rel) { row = r; break }
+    }
+    if (!row) return
+    const paneRect = pane.getBoundingClientRect()
+    const rowRect = row.getBoundingClientRect()
+    if (rowRect.top < paneRect.top + 8) {
+      pane.scrollTop += rowRect.top - paneRect.top - 8
+    } else if (rowRect.bottom > paneRect.bottom - 8) {
+      pane.scrollTop += rowRect.bottom - paneRect.bottom + 8
+    }
+  }, [revealTarget])
 
   const restorePersisted = async (): Promise<void> => {
     const currentRoot = rootRef.current
@@ -258,6 +402,39 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
         }
       }
     }
+
+    await restoreTreeState(saved)
+  }
+
+  /** 恢复目录树记忆：展开状态、当前目录、滚动位置。失效目录静默剔除。 */
+  const restoreTreeState = async (saved: PersistedState): Promise<void> => {
+    const expandedList = Array.isArray(saved.expanded) ? saved.expanded.filter(Boolean) : []
+
+    // 展开目录要能渲染出来，需要它自身及其全部祖先都完成懒加载
+    const toLoad = new Set<string>()
+    for (const rel of expandedList) {
+      const parts = rel.split('/').filter(Boolean)
+      let acc = ''
+      for (const part of parts) {
+        acc = acc ? `${acc}/${part}` : part
+        toLoad.add(acc)
+      }
+    }
+    await Promise.all(Array.from(toLoad).map((d) => loadDir(d, { silent: true })))
+
+    const nextExpanded = new Set(
+      expandedList.filter((d) => Object.prototype.hasOwnProperty.call(childrenMapRef.current, d)),
+    )
+    expandedRef.current = nextExpanded
+    setExpanded(nextExpanded)
+
+    if (typeof saved.activeDir === 'string') {
+      activeDirRef.current = saved.activeDir
+      setActiveDir(saved.activeDir)
+    }
+    if (typeof saved.treeScrollTop === 'number' && saved.treeScrollTop > 0) {
+      pendingTreeScrollRef.current = saved.treeScrollTop
+    }
   }
 
   const openFileInPane = async (paneId: string, rel: string, pin: boolean): Promise<void> => {
@@ -266,6 +443,8 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
     setActivePaneId(paneId)
     setActiveDir(parentRel(rel))
     setError(null)
+    // 左侧树同步定位：展开父目录并滚动到该文件（已在可视区域时无操作）
+    void revealInTree(rel)
 
     const pane = panesRef.current.find((p) => p.id === paneId)
     if (!pane) return
@@ -352,25 +531,16 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
       return
     }
 
-    // 逐个展开父目录（缺失的目录先懒加载）
-    const parts = rel.split('/').filter(Boolean)
-    const dirs: string[] = []
-    let acc = ''
-    for (let i = 0; i < parts.length - 1; i++) {
-      acc = acc ? `${acc}/${parts[i]}` : parts[i]
-      dirs.push(acc)
-    }
-    for (const dir of ['', ...dirs]) {
-      if (!Object.prototype.hasOwnProperty.call(childrenMapRef.current, dir)) {
-        await loadDir(dir)
-      }
-    }
-    setExpanded((prev) => new Set([...prev, ...dirs]))
+    // 退出搜索让树可见，再展开父目录并定位
+    setSearchOpen(false)
+    await revealInTree(rel)
     await openFileInPane(activePaneIdRef.current, rel, true)
   }
   openExternalRef.current = openExternalPath
 
   useEffect(() => {
+    // 会话切换重新恢复记忆期间同样禁止写入
+    hydratedRef.current = false
     void (async () => {
       try {
         const p = await getWorkspace(sessionId)
@@ -378,8 +548,11 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
         setRoot(p)
         if (p) {
           await loadDir('')
-          // 记忆恢复：把上次打开的标签页还原到编辑器
+          // 记忆恢复：标签页 + 目录树展开/当前目录/滚动位置
           await restorePersisted()
+          // 让左侧树定位到当前活动标签的文件
+          const activePane = panesRef.current.find((pp) => pp.id === activePaneIdRef.current)
+          if (activePane?.activeRel) await revealInTree(activePane.activeRel)
         }
         const pending = pendingExternalRef.current
         if (pending) {
@@ -388,20 +561,43 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
         }
       } catch (e) {
         setError(String((e as Error).message || e))
+      } finally {
+        // 无论恢复成败，此后允许持久化写入（否则首次使用将永远不保存）
+        hydratedRef.current = true
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
-  // 记忆持久化：标签结构（文件名/固定状态/活动标签/分栏）保存到 localStorage
-  useEffect(() => {
-    if (!root) return
+  // 记忆持久化：标签结构、目录树展开状态、当前目录、树滚动位置存到 localStorage。
+  // 卸载（切走「文件」页）时再保存一次，把最后一次滚动位置也带上。
+  const persistNow = (): void => {
+    const currentRoot = rootRef.current
+    // 恢复完成前写入会用内存初始状态覆盖上次保存的数据
+    if (!currentRoot || !hydratedRef.current) return
     try {
-      localStorage.setItem(storageKey(sessionId), JSON.stringify(serializePersisted(panes, activePaneId)))
+      localStorage.setItem(storageKey(sessionRef.current), JSON.stringify(serializePersisted(
+        panesRef.current,
+        activePaneIdRef.current,
+        {
+          expanded: Array.from(expandedRef.current),
+          activeDir: activeDirRef.current,
+          treeScrollTop: treeScrollRef.current,
+        },
+      )))
     } catch {
       // localStorage 不可用时静默降级
     }
-  }, [panes, activePaneId, root, sessionId])
+  }
+
+  useEffect(() => {
+    persistNow()
+  }, [panes, activePaneId, expanded, activeDir, root, sessionId])
+
+  useEffect(() => {
+    return () => persistNow()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const consume = (): void => {
@@ -684,7 +880,11 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
 
         {root && (
           <div className="split">
-            <div className="tree-pane">
+            <div
+              className="tree-pane"
+              ref={treePaneRef}
+              onScroll={(e) => { treeScrollRef.current = e.currentTarget.scrollTop }}
+            >
               {searchOpen ? (
                 <SearchPanel
                   query={searchQuery}
@@ -693,7 +893,12 @@ export function FileManagerPanel(props: { sessionId?: string }): ReactNode {
                   onQueryChange={setSearchQuery}
                   onSearch={() => void doSearch()}
                   onOpenFile={(file) => openSearchFile(file)}
-                  onBack={() => setSearchOpen(false)}
+                  onBack={() => {
+                    setSearchOpen(false)
+                    // 回到树视图时定位到当前活动文件
+                    const pane = panesRef.current.find((p) => p.id === activePaneIdRef.current)
+                    if (pane?.activeRel) void revealInTree(pane.activeRel)
+                  }}
                 />
               ) : (
                 <TreeView
