@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — 多标签 / 可分栏文件编辑器区域。
+ * @daxu8972/dsh-file-manager — 多标签 / 可分栏文件编辑器区域。
  *
  * 对齐 VSCode 行为：
  * - 单击左侧文件以“预览标签”打开（斜体），可被下一次单击替换；

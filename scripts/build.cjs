@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @dsh-external/dsh-file-manager — Windows-friendly build (no bash required).
+// @daxu8972/dsh-file-manager — Windows-friendly build (no bash required).
 // Compiles src/ → lib/ with the plugin's own tsc (devDependency), linking the
 // build-time type dependencies from an INSTALLED dsh package instead of a
 // source checkout, so a checkout is never required.

@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — client 文件管理面板（React 组件）。
+ * @daxu8972/dsh-file-manager — client 文件管理面板（React 组件）。
  *
  * 挂到 `conversation.view` 槽（会话标签页环，Chat 之外多一个「文件」页）。
  * 交互参照 VSCode：
@@ -10,7 +10,7 @@
  * - 记忆上次的面板状态：再次进入「文件」页时自动恢复已打开文件、
  *   目录树展开状态、当前目录与树滚动位置，不再是初始状态
  * - 打开文件时左侧树自动展开父目录并滚动定位到选中文件（reveal）
- * 数据来自 host 的 `@dsh-external/dsh-file-manager/api` 端点。
+ * 数据来自 host 的 `@daxu8972/dsh-file-manager/api` 端点。
  */
 import { Component, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'

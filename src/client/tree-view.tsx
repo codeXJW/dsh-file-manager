@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — VSCode 风格文件树视图。
+ * @daxu8972/dsh-file-manager — VSCode 风格文件树视图。
  *
  * 纯展示/交互组件：目录懒加载由父组件维护 `childrenMap`，这里只负责渲染
  * 展开态、选中态、行内重命名与 hover 操作（重命名 / 删除）。

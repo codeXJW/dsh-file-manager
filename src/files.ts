@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — 文件系统操作封装（server 侧公共层）。
+ * @daxu8972/dsh-file-manager — 文件系统操作封装（server 侧公共层）。
  *
  * 所有文件操作统一走这里，供 HTTP 面板 API 与模型工具共用：
  *  - 默认以「项目根目录（root）」为边界，任何相对/绝对路径都会被解析到 root 内；

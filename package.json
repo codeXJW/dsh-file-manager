@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-external/dsh-file-manager",
+  "name": "@daxu8972/dsh-file-manager",
   "version": "0.1.0",
   "description": "DSH 外置文件管理器插件：VSCode 风格项目文件树 + 文件增删改查（新建/重命名/删除/编辑/保存）+ 模型文件工具。",
   "type": "module",

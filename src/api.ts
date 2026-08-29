@@ -1,7 +1,7 @@
 /**
- * @dsh-external/dsh-file-manager — host HTTP API 装配。
+ * @daxu8972/dsh-file-manager — host HTTP API 装配。
  *
- * 通过 `ctx.webServer` 注册 `/@dsh-external/dsh-file-manager/api` JSON 端点，
+ * 通过 `ctx.webServer` 注册 `/@daxu8972/dsh-file-manager/api` JSON 端点，
  * 浏览器端「文件」面板直接 fetch：
  *  - GET  /workspace  当前会话工作区（默认项目根）
  *  - GET  /list       某目录直系子项（树状视图懒加载）
@@ -24,7 +24,7 @@ import {
   writeTextFile,
 } from './files.js'
 
-const PREFIX = '/@dsh-external/dsh-file-manager/api'
+const PREFIX = '/@daxu8972/dsh-file-manager/api'
 
 /** host webserver 服务的最小可用面（运行期存在才挂载；编译期不依赖其包）。 */
 interface WebServerLike {

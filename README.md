@@ -1,4 +1,4 @@
-# @dsh-external/dsh-file-manager
+# @daxu8972/dsh-file-manager
 
 > DSH 外置文件管理器插件 —— 在 DSH Web 界面里像 VSCode 一样浏览、创建、编辑、重命名、删除项目文件，同时给模型提供 `file_*` 工具。
 
@@ -85,14 +85,14 @@ dev_install_package {"dir": "<本插件目录绝对路径>"}
 
 ```bash
 npm pack
-# 得到 @dsh-external-dsh-file-manager-0.1.0.tgz
+# 得到 @daxu8972-dsh-file-manager-0.1.0.tgz
 ```
 
 然后作为普通依赖塞进你的 DSH profile：
 
 ```
 dev_install_package {"dir": "<解压后的包目录>"}
-# 或手动：把 tarball 里的 lib/ + package.json 放进 node_modules/@dsh-external/dsh-file-manager
+# 或手动：把 tarball 里的 lib/ + package.json 放进 node_modules/@daxu8972/dsh-file-manager
 ```
 
 ### 方式 C：直接装配（重启常驻）
@@ -121,7 +121,7 @@ npm run build:client   # browser client → lib/client.js
 
 ```
 lib/index.js       # 插件入口（apply）
-lib/api.js         # HTTP /@dsh-external/dsh-file-manager/api
+lib/api.js         # HTTP /@daxu8972/dsh-file-manager/api
 lib/tools.js       # ctx.tools.register 文件工具
 lib/files.js       # 文件系统封装（CRUD + 树）
 lib/client.js      # 浏览器「文件」面板
@@ -136,7 +136,7 @@ lib/client.js      # 浏览器「文件」面板
   └─ 文件标签页（conversation.view 槽）──fetch──▶ HTTP JSON API
                                                     │
 DSH host（apply）
-  ├─ ctx.webServer.register('/@dsh-external/dsh-file-manager/api')
+  ├─ ctx.webServer.register('/@daxu8972/dsh-file-manager/api')
   │     ├─ GET  /workspace   当前会话工作区
   │     ├─ GET  /list        目录直系子项（?depth=N 可递归）
   │     ├─ GET  /file        读取文件
@@ -148,4 +148,4 @@ DSH host（apply）
 
 ## License
 
-MIT © 2026 @dsh-external
+MIT © 2026 daxu8972

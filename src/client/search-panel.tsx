@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — VSCode 风格全局搜索面板。
+ * @daxu8972/dsh-file-manager — VSCode 风格全局搜索面板。
  *
  * 替换左侧文件树：输入关键字 → 调用服务端 `/search` → 按文件分组展示命中，
  * 点击命中行/文件会打开对应文件到右侧编辑器。

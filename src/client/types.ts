@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — 客户端共用类型。
+ * @daxu8972/dsh-file-manager — 客户端共用类型。
  */
 
 export interface FsEntry {

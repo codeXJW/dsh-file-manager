@@ -1,10 +1,10 @@
 /**
- * @dsh-external/dsh-file-manager — DSH 外置文件管理器插件（hybrid）。
+ * @daxu8972/dsh-file-manager — DSH 外置文件管理器插件（hybrid）。
  *
  * 服务端装配两块能力，共用同一套 files.ts：
  *  1. `ctx.tools.register` → 把 file_tree/file_read/file_write/file_mkdir/
  *     file_rename/file_delete 注册成模型可见工具；
- *  2. `ctx.webServer` → HTTP JSON API（`/@dsh-external/dsh-file-manager/api`），
+ *  2. `ctx.webServer` → HTTP JSON API（`/@daxu8972/dsh-file-manager/api`），
  *     供浏览器端「文件」面板 fetch（树状浏览 + 编辑/新建/重命名/删除）。
  *
  * 客户端（src/client/）把面板挂进 `conversation.view` 槽，变成一个
@@ -14,7 +14,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { mountFileApi } from './api.js'
 import { registerFileTools } from './tools.js'
 
-export const name = '@dsh-external/dsh-file-manager'
+export const name = '@daxu8972/dsh-file-manager'
 
 // 服务端依赖：
 //   - tools：工具注册（@deepseek-ai/dsh-tools）

@@ -1,9 +1,9 @@
 /**
- * @dsh-external/dsh-file-manager — 客户端 API 封装。
+ * @daxu8972/dsh-file-manager — 客户端 API 封装。
  */
 import type { FsEntry, FileReadResult, SearchResult } from './types'
 
-const API = '/@dsh-external/dsh-file-manager/api'
+const API = '/@daxu8972/dsh-file-manager/api'
 
 export async function api<T = any>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(API + path, init)

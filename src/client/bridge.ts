@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — 对话区文件地址 → 文件管理器桥接。
+ * @daxu8972/dsh-file-manager — 对话区文件地址 → 文件管理器桥接。
  *
  * DSH 的对话区打开文件默认走 `workspaces.openPath`（用系统默认程序打开）。
  * 本桥接把那条路径改为：切到「文件」标签页，并让文件管理面板打开对应文件。
@@ -7,7 +7,7 @@
  * 由于面板可能尚未挂载，先写入 `pendingPath` 再切标签；面板挂载时消费。
  */
 
-export const PANEL_ID = '@dsh-external/dsh-file-manager-panel'
+export const PANEL_ID = '@daxu8972/dsh-file-manager-panel'
 export const PANEL_LABEL = '文件'
 export const OPEN_EVENT = 'dsh-file-manager:open'
 

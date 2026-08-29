@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — 把常用文件操作注册成 DSH 工具。
+ * @daxu8972/dsh-file-manager — 把常用文件操作注册成 DSH 工具。
  *
  * 与 HTTP 面板 API 共用同一套 files.ts 实现，模型可直接驱动：
  * file_tree / file_read / file_write / file_mkdir / file_rename / file_delete。

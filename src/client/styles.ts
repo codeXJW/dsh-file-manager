@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-file-manager — 客户端局部样式。
+ * @daxu8972/dsh-file-manager — 客户端局部样式。
  * 使用 DSH 设计 token（--dsw-*），带浅色兜底值，避免依赖具体主题。
  */
 export const CSS = `
